@@ -97,7 +97,7 @@ cat "$FILEPATH" \
 TARGET_DIR="$REPOS_DIR/my-app/src"
 find "$TARGET_DIR" \( -name '*.ts' -o -name '*.tsx' \) \
   | head -15 \
-  | xargs -I{} sh -c 'echo "=== {} ==="; cat "{}"' \
+  | xargs -I{} sh -c 'echo "=== $1 ==="; cat "$1"' -- {} \
   | gemini 'Review these TypeScript files for code quality.
     Group findings by file. Focus on:
     - Duplicate logic between files
@@ -111,7 +111,7 @@ find "$TARGET_DIR" \( -name '*.ts' -o -name '*.tsx' \) \
 TARGET_DIR="$REPOS_DIR/my-app/src"
 find "$TARGET_DIR" -name '*.ts' -o -name '*.tsx' \
   | head -20 \
-  | xargs -I{} sh -c 'echo "=== {} ==="; cat "{}"' \
+  | xargs -I{} sh -c 'echo "=== $1 ==="; cat "$1"' -- {} \
   | gemini 'Identify duplicated or very similar logic across these files.
     For each duplication: name it, show which files, suggest how to consolidate.
     If no duplicates, say "No significant duplication found."'
@@ -183,7 +183,7 @@ cat "$REPO/package.json" \
 
 # E2: Check all package.json files across cloned repos
 find "$REPOS_DIR" -maxdepth 2 -name 'package.json' \
-  | xargs -I{} sh -c 'echo "=== {} ==="; cat "{}"' \
+  | xargs -I{} sh -c 'echo "=== $1 ==="; cat "$1"' -- {} \
   | gemini 'Review these package.json files from multiple repos.
     Identify:
     1. Packages used in multiple repos that should be standardized to one version
