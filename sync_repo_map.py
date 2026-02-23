@@ -3,13 +3,14 @@
 sync_repo_map.py — Repo-Map Sync Script
 GitHub Profile Mirror for DaRipper91
 
-Runs 4x daily via GitHub Actions (or local cron).
+Runs every 2 hours via GitHub Actions.
 Mirrors all repos as structured Markdown file maps.
+At the end, calls sync_changelogs to mirror all CHANGELOG.md files.
 
 Usage:
     python sync_repo_map.py
     python sync_repo_map.py --verbose
-    python sync_repo_map.py --repo my-specific-repo   (single repo mode)
+    python sync_repo_map.py --repo my-specific-repo
 """
 
 import subprocess
@@ -31,14 +32,18 @@ LOG_FILE    = META_DIR / "sync-log.md"
 CHANGE_FILE = META_DIR / "change-report.md"
 
 # ── Argument Parsing ───────────────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description="Sync GitHub profile to repo-map")
-parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-parser.add_argument("--repo", type=str, help="Only sync a single repo by name")
-parser.add_argument("--dry-run", action="store_true", help="Don't write any files")
-args = parser.parse_args()
+def get_args():
+    parser = argparse.ArgumentParser(description="Sync GitHub profile to repo-map")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--repo", type=str, help="Only sync a single repo by name")
+    parser.add_argument("--dry-run", action="store_true", help="Don't write any files")
+    return parser.parse_args()
+
+# Global args used by log() and save_hashes()
+args = argparse.Namespace(verbose=False, dry_run=False, repo=None)
 
 def log(msg):
-    if args.verbose:
+    if args and args.verbose:
         print(f"  {msg}")
 
 def run(cmd, silent=False):
@@ -51,11 +56,10 @@ def run(cmd, silent=False):
             print(f"  ⚠️  Command failed: {cmd_str}\n     {e.stderr.strip()}", file=sys.stderr)
         return None
 
-# ── Setup Directories ──────────────────────────────────────────────────────────
+# ── Setup ──────────────────────────────────────────────────────────────────────
 for d in [OUTPUT_DIR, META_DIR, REVIEWS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
-# ── Load Previous Hashes (for change detection) ────────────────────────────────
 def load_hashes():
     if PREV_HASH.exists():
         try:
@@ -68,24 +72,26 @@ def save_hashes(h):
     if not args.dry_run:
         PREV_HASH.write_text(json.dumps(h, indent=2))
 
-# ── Main Sync ──────────────────────────────────────────────────────────────────
 prev_hashes = load_hashes()
 curr_hashes = {}
 LOG         = []
 CHANGES     = []
 total_files = 0
-start       = datetime.datetime.utcnow()
+start       = datetime.datetime.now(datetime.timezone.utc)
 now         = start
 now_str     = now.strftime("%Y-%m-%d %H:%M UTC")
 
 print(f"🔄 Repo-Map Sync starting: {now_str}")
 print(f"   Profile: {USERNAME}")
 
-# Fetch repo list
+# ── Fetch repo list ────────────────────────────────────────────────────────────
 if args.repo:
-    # Single repo mode
-    repo_raw = run(["gh", "api", f"repos/{USERNAME}/{args.repo}"])
-    if not repo_raw:
+    repo_data = run(
+        f"gh api repos/{USERNAME}/{args.repo}"
+        + " | jq '[{name: .name, defaultBranchRef: {name: .default_branch},"
+        + " pushedAt: .pushed_at, description: .description}]'"
+    )
+    if not repo_data:
         print(f"❌ Could not fetch repo: {args.repo}")
         sys.exit(1)
     try:
@@ -106,7 +112,6 @@ else:
     ])
     if not repo_json:
         print("❌ Failed to fetch repo list. Is gh authenticated?")
-        print("   Run: gh auth login")
         sys.exit(1)
     repos = json.loads(repo_json)
 
@@ -122,13 +127,12 @@ for repo in repos:
 
     log(f"Processing: {name} [{branch}]")
 
-    # ── Fetch file tree ────────────────────────────────────────────────────────
     tree_raw = run(
         ["gh", "api", f"repos/{USERNAME}/{name}/git/trees/{branch}?recursive=1"],
         silent=True
     )
     if not tree_raw:
-        msg = f"⚠️ Skipped {name} — could not fetch tree (empty repo or auth issue)"
+        msg = f"⚠️ Skipped {name} — could not fetch tree"
         print(f"   {msg}")
         LOG.append(msg)
         continue
@@ -136,17 +140,15 @@ for repo in repos:
     try:
         tree_data = json.loads(tree_raw)
     except json.JSONDecodeError:
-        msg = f"⚠️ Skipped {name} — malformed tree response"
-        LOG.append(msg)
+        LOG.append(f"⚠️ Skipped {name} — malformed tree response")
         continue
 
     if tree_data.get("truncated"):
-        LOG.append(f"⚠️ {name} — tree truncated (>100k files). Only partial map available.")
+        LOG.append(f"⚠️ {name} — tree truncated. Only partial map available.")
 
     files = [f for f in tree_data.get("tree", []) if f.get("type") == "blob"]
     total_files += len(files)
 
-    # ── Group files by parent directory ───────────────────────────────────────
     dir_map = {}
     for f in files:
         parent = str(Path(f["path"]).parent)
@@ -155,7 +157,6 @@ for repo in repos:
     repo_out = OUTPUT_DIR / name
     repo_out.mkdir(parents=True, exist_ok=True)
 
-    # ── Write per-directory map.md files ──────────────────────────────────────
     for dir_path, file_list in dir_map.items():
         out_path = repo_out / dir_path / "map.md"
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,11 +191,9 @@ for repo in repos:
             CHANGES.append(f"✅ New: `{name}/{dir_path}` ({len(file_list)} files)")
 
         curr_hashes[key] = h
-
         if not args.dry_run:
             out_path.write_text(content, encoding="utf-8")
 
-    # ── Write repo-level README.md ─────────────────────────────────────────────
     dir_links = "\n".join(
         [f"- [{d}/](./{d}/map.md) — {len(dir_map[d])} files" for d in sorted(dir_map.keys())]
     )
@@ -213,24 +212,42 @@ for repo in repos:
         f"*Generated by repo-map sync. Last updated: {now_str}*\n"
     )
     if not args.dry_run:
-        (repo_out / "README.md").write_text(readme_content, encoding="utf-8")
+        Path("README.md").write_text("".join(readme_lines), encoding="utf-8")
 
-    repo_summary.append(
-        f"| [{name}](./repos/{name}/README.md) | `{branch}` | {len(files)} | {pushed} |"
+    # ── Write sync log entry ───────────────────────────────────────────────────────
+    log_entry = f"### Sync: {now_str}\n\n"
+    log_entry += f"- **Repos:** {len(repos)}\n"
+    log_entry += f"- **Files:** {total_files:,}\n"
+    log_entry += f"- **Changes:** {len(CHANGES)}\n"
+    log_entry += f"- **Duration:** {duration}s\n\n"
+    log_entry += "\n".join([f"  - {l}" for l in LOG]) + "\n\n---\n\n"
+
+    if not args.dry_run:
+        existing_log = LOG_FILE.read_text(encoding="utf-8") if LOG_FILE.exists() else "# Sync Log\n\n"
+        header = "# Sync Log\n\n"
+        updated_log = header + log_entry + existing_log.replace(header, "", 1)
+        LOG_FILE.write_text(updated_log, encoding="utf-8")
+
+    # ── Write change report ────────────────────────────────────────────────────────
+    change_report = (
+        f"# Change Report\n\n"
+        f"**Run:** {now_str}  \n"
+        f"**Repos Scanned:** {len(repos)}  \n"
+        f"**Changes Found:** {len(CHANGES)}  \n\n"
+        "---\n\n"
+        + (("\n".join(CHANGES)) if CHANGES else "_No changes detected this run._")
+        + "\n"
     )
     LOG.append(f"✅ {name}: {len(files)} files, {len(dir_map)} dirs")
     print(f"   ✅ {name}: {len(files)} files")
 
-# ── Detect removed repos/dirs ──────────────────────────────────────────────────
 for old_key in prev_hashes:
     if old_key not in curr_hashes:
         CHANGES.append(f"🗑️ Removed: `{old_key}`")
 
 save_hashes(curr_hashes)
-
 duration = int((datetime.datetime.utcnow() - start).total_seconds())
 
-# ── Write root README.md ───────────────────────────────────────────────────────
 change_block = "\n".join(CHANGES) if CHANGES else "_No changes detected._"
 
 readme_lines = [
@@ -250,14 +267,13 @@ readme_lines = [
     "## 🔗 Meta\n\n",
     "- [Sync Log](./_meta/sync-log.md)\n",
     "- [Change Report](./_meta/change-report.md)\n",
-    "- [Code Reviews](./_meta/reviews/)\n\n",
+    "- [Changelog Index](./_meta/changelog-index.md)\n\n",
     "---\n\n",
-    "*Synced automatically 4x daily via GitHub Actions. [View workflow](../../actions).*\n",
+    "*Synced automatically every 2 hours via GitHub Actions.*\n",
 ]
 if not args.dry_run:
     Path("README.md").write_text("".join(readme_lines), encoding="utf-8")
 
-# ── Write sync log entry ───────────────────────────────────────────────────────
 log_entry = f"### Sync: {now_str}\n\n"
 log_entry += f"- **Repos:** {len(repos)}\n"
 log_entry += f"- **Files:** {total_files:,}\n"
@@ -271,7 +287,6 @@ if not args.dry_run:
     updated_log = header + log_entry + existing_log.replace(header, "", 1)
     LOG_FILE.write_text(updated_log, encoding="utf-8")
 
-# ── Write change report ────────────────────────────────────────────────────────
 change_report = (
     f"# Change Report\n\n"
     f"**Run:** {now_str}  \n"
@@ -284,11 +299,9 @@ change_report = (
 if not args.dry_run:
     CHANGE_FILE.write_text(change_report, encoding="utf-8")
 
-# ── Final Summary ──────────────────────────────────────────────────────────────
-print(f"\n✅ Sync complete.")
-print(f"   Repos: {len(repos)}")
-print(f"   Files: {total_files:,}")
-print(f"   Changes: {len(CHANGES)}")
-print(f"   Duration: {duration}s")
-if args.dry_run:
-    print("   ⚠️  DRY RUN — no files were written")
+print(f"\n✅ Sync complete. Repos: {len(repos)}, Files: {total_files:,}, Changes: {len(CHANGES)}, Duration: {duration}s")
+
+# ── Changelog mirror ───────────────────────────────────────────────────────────
+print('\n📋 Syncing changelogs...')
+import sync_changelogs
+sync_changelogs.run_sync(repos, USERNAME)

@@ -63,11 +63,19 @@
 - **Type:** `.py`
 - **Description:** *(pending AI description pass)*
 
-## context.py
+## config.py
 
 - **Repo:** `automatic-tribble`
 - **Branch:** `main`
-- **Path:** `src/file_manager/context.py`
+- **Path:** `src/file_manager/config.py`
+- **Type:** `.py`
+- **Description:** *(pending AI description pass)*
+
+## exceptions.py
+
+- **Repo:** `automatic-tribble`
+- **Branch:** `main`
+- **Path:** `src/file_manager/exceptions.py`
 - **Type:** `.py`
 - **Description:** *(pending AI description pass)*
 
@@ -87,11 +95,11 @@
 - **Type:** `.py`
 - **Description:** *(pending AI description pass)*
 
-## scheduler.py
+## logger.py
 
 - **Repo:** `automatic-tribble`
 - **Branch:** `main`
-- **Path:** `src/file_manager/scheduler.py`
+- **Path:** `src/file_manager/logger.py`
 - **Type:** `.py`
 - **Description:** *(pending AI description pass)*
 
@@ -116,14 +124,6 @@
 - **Repo:** `automatic-tribble`
 - **Branch:** `main`
 - **Path:** `src/file_manager/start_menu.py`
-- **Type:** `.py`
-- **Description:** *(pending AI description pass)*
-
-## tags.py
-
-- **Repo:** `automatic-tribble`
-- **Branch:** `main`
-- **Path:** `src/file_manager/tags.py`
 - **Type:** `.py`
 - **Description:** *(pending AI description pass)*
 
