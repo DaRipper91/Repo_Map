@@ -73,7 +73,7 @@ curr_hashes = {}
 LOG         = []
 CHANGES     = []
 total_files = 0
-start       = datetime.datetime.utcnow()
+start       = datetime.datetime.now(datetime.timezone.utc)
 now         = start
 now_str     = now.strftime("%Y-%m-%d %H:%M UTC")
 
@@ -221,7 +221,7 @@ for old_key in prev_hashes:
 
 save_hashes(curr_hashes)
 
-duration = int((datetime.datetime.utcnow() - start).total_seconds())
+duration = int((datetime.datetime.now(datetime.timezone.utc) - start).total_seconds())
 
 # ── Write root README.md ───────────────────────────────────────────────────────
 change_block = "\n".join(CHANGES) if CHANGES else "_No changes detected._"
