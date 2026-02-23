@@ -1,0 +1,89 @@
+name: Sync Repo Map
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+on:
+  schedule:
+    # 4x daily: midnight, 6am, noon, 6pm UTC
+    # Adjust times here if you want different sync frequency.
+    # See Section 4 of the guide for cron reference.
+    - cron: '0 0,6,12,18 * * *'
+
+  # Allow manual trigger from GitHub Actions UI or gh CLI:
+  #   gh workflow run sync.yml
+  workflow_dispatch:
+
+  # Also run when the sync script itself is updated
+  push:
+    branches: [main]
+    paths:
+      - 'sync_repo_map.py'
+      - '.github/workflows/sync.yml'
+
+# ── Permissions ────────────────────────────────────────────────────────────────
+permissions:
+  contents: write   # Required to commit sync output back to repo
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+  sync:
+    name: Sync GitHub Profile → Repo Map
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # Fail if sync takes longer than 30 min
+
+    steps:
+
+      # ── 1. Checkout repo-map ───────────────────────────────────────────────
+      - name: Checkout repo-map
+        uses: actions/checkout@v4
+        with:
+          # Use GH_TOKEN so the bot can push commits back
+          token: ${{ secrets.GH_TOKEN }}
+          # Fetch full history for accurate change detection
+          fetch-depth: 0
+
+      # ── 2. Set up Python ───────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ── 3. Authenticate gh CLI with token ──────────────────────────────────
+      - name: Authenticate gh CLI
+        run: |
+          echo "${{ secrets.GH_TOKEN }}" | gh auth login --with-token
+          gh auth status
+
+      # ── 4. Run the sync script ────────────────────────────────────────────
+      - name: Run sync script
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          python sync_repo_map.py --verbose
+
+      # ── 5. Commit and push if there are changes ───────────────────────────
+      - name: Commit and push changes
+        run: |
+          git config user.name  "repo-map-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add -A
+
+          # Only commit if there are actual changes
+          if git diff --cached --quiet; then
+            echo "No changes to commit — repo-map is already up to date."
+          else
+            # Get a quick change summary for the commit message
+            CHANGES=$(git diff --cached --name-only | wc -l | tr -d ' ')
+            TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
+            git commit -m "🔄 sync: ${TIMESTAMP} — ${CHANGES} files updated"
+            git push
+            echo "✅ Committed and pushed ${CHANGES} changed files."
+          fi
+
+      # ── 6. Output sync summary in Actions log ─────────────────────────────
+      - name: Print sync summary
+        if: always()
+        run: |
+          if [ -f "_meta/change-report.md" ]; then
+            echo "=== Change Report ==="
+            cat _meta/change-report.md
+          fi
