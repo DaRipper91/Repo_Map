@@ -3,7 +3,7 @@
 **Repo:** [Starship-Command](https://github.com/DaRipper91/Starship-Command)  
 **Branch:** `main`  
 **Directory:** `.`  
-**File Count:** 25  
+**File Count:** 27  
 
 ---
 
@@ -68,6 +68,22 @@
 - **Repo:** `Starship-Command`
 - **Branch:** `main`
 - **Path:** `DEVELOPER_GUIDE.md`
+- **Type:** `.md`
+- **Description:** *(pending AI description pass)*
+
+## JULES-BRIEFING.md
+
+- **Repo:** `Starship-Command`
+- **Branch:** `main`
+- **Path:** `JULES-BRIEFING.md`
+- **Type:** `.md`
+- **Description:** *(pending AI description pass)*
+
+## JULES_STARSHIP_COMMAND_ENHANCED.md
+
+- **Repo:** `Starship-Command`
+- **Branch:** `main`
+- **Path:** `JULES_STARSHIP_COMMAND_ENHANCED.md`
 - **Type:** `.md`
 - **Description:** *(pending AI description pass)*
 
