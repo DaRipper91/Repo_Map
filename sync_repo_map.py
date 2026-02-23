@@ -43,11 +43,12 @@ def log(msg):
 
 def run(cmd, silent=False):
     try:
-        result = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.PIPE)
+        result = subprocess.check_output(cmd, shell=False, text=True, stderr=subprocess.PIPE)
         return result.strip()
     except subprocess.CalledProcessError as e:
         if not silent:
-            print(f"  ⚠️  Command failed: {cmd}\n     {e.stderr.strip()}", file=sys.stderr)
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+            print(f"  ⚠️  Command failed: {cmd_str}\n     {e.stderr.strip()}", file=sys.stderr)
         return None
 
 # ── Setup Directories ──────────────────────────────────────────────────────────
@@ -83,20 +84,26 @@ print(f"   Profile: {USERNAME}")
 # Fetch repo list
 if args.repo:
     # Single repo mode
-    repo_data = run(
-        f"gh api repos/{USERNAME}/{args.repo}"
-        + " | jq '[{name: .name, defaultBranchRef: {name: .default_branch},"
-        + " pushedAt: .pushed_at, description: .description}]'"
-    )
-    if not repo_data:
+    repo_raw = run(["gh", "api", f"repos/{USERNAME}/{args.repo}"])
+    if not repo_raw:
         print(f"❌ Could not fetch repo: {args.repo}")
         sys.exit(1)
-    repos = json.loads(repo_data)
+    try:
+        repo_item = json.loads(repo_raw)
+        repos = [{
+            "name": repo_item.get("name"),
+            "defaultBranchRef": {"name": repo_item.get("default_branch")},
+            "pushedAt": repo_item.get("pushed_at"),
+            "description": repo_item.get("description")
+        }]
+    except json.JSONDecodeError:
+        print(f"❌ Failed to parse repo data for: {args.repo}")
+        sys.exit(1)
 else:
-    repo_json = run(
-        f'gh repo list {USERNAME} --limit 200 '
-        f'--json name,defaultBranchRef,pushedAt,description'
-    )
+    repo_json = run([
+        "gh", "repo", "list", USERNAME, "--limit", "200",
+        "--json", "name,defaultBranchRef,pushedAt,description"
+    ])
     if not repo_json:
         print("❌ Failed to fetch repo list. Is gh authenticated?")
         print("   Run: gh auth login")
@@ -117,7 +124,7 @@ for repo in repos:
 
     # ── Fetch file tree ────────────────────────────────────────────────────────
     tree_raw = run(
-        f"gh api 'repos/{USERNAME}/{name}/git/trees/{branch}?recursive=1'",
+        ["gh", "api", f"repos/{USERNAME}/{name}/git/trees/{branch}?recursive=1"],
         silent=True
     )
     if not tree_raw:
