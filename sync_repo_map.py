@@ -76,7 +76,7 @@ curr_hashes = {}
 LOG         = []
 CHANGES     = []
 total_files = 0
-start       = datetime.datetime.utcnow()
+start       = datetime.datetime.now(datetime.timezone.utc)
 now         = start
 now_str     = now.strftime("%Y-%m-%d %H:%M UTC")
 
