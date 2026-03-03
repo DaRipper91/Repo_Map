@@ -104,6 +104,10 @@ MAX_DIFF_CHARS  = 12000
 MAX_COMMITS     = 20
 USE_AI          = bool(os.environ.get("GEMINI_API_KEY"))
 
+# Pre-compiled regex patterns for performance
+RE_ENTRY_START  = re.compile(r'^## \[', re.MULTILINE)
+RE_ENTRY_SPLIT  = re.compile(r'(?=^## \[)', re.MULTILINE)
+
 REPO_NAME   = os.environ.get("REPO_NAME", "unknown/repo")
 COMMIT_SHA  = os.environ.get("COMMIT_SHA", "")
 PUSHER      = os.environ.get("PUSHER", "unknown")
@@ -322,16 +326,14 @@ def load_existing():
     if not CHANGELOG_FILE.exists():
         return HEADER, ""
     content = CHANGELOG_FILE.read_text(encoding="utf-8")
-    # Escaped regex for python string literal
-    match = re.search(r'^## \[', content, re.MULTILINE)
+    match = RE_ENTRY_START.search(content)
     if match:
         return content[:match.start()], content[match.start():]
     return content, ""
 
 
 def write_changelog(new_entry, existing_header, existing_entries):
-    # Escaped regex for python string literal
-    entry_blocks = re.split(r'(?=^## \[)', existing_entries, flags=re.MULTILINE)
+    entry_blocks = RE_ENTRY_SPLIT.split(existing_entries)
     entry_blocks = [b for b in entry_blocks if b.strip()]
     kept = entry_blocks[:49]
     content = existing_header + new_entry + "\n".join(kept)
