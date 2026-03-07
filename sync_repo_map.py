@@ -86,16 +86,12 @@ print(f"   Profile: {USERNAME}")
 
 # ── Fetch repo list ────────────────────────────────────────────────────────────
 if args.repo:
-    repo_data = run(
-        f"gh api repos/{USERNAME}/{args.repo}"
-        + " | jq '[{name: .name, defaultBranchRef: {name: .default_branch},"
-        + " pushedAt: .pushed_at, description: .description}]'"
-    )
-    if not repo_data:
+    repo_data_raw = run(["gh", "api", f"repos/{USERNAME}/{args.repo}"])
+    if not repo_data_raw:
         print(f"❌ Could not fetch repo: {args.repo}")
         sys.exit(1)
     try:
-        repo_item = json.loads(repo_raw)
+        repo_item = json.loads(repo_data_raw)
         repos = [{
             "name": repo_item.get("name"),
             "defaultBranchRef": {"name": repo_item.get("default_branch")},
@@ -246,7 +242,7 @@ for old_key in prev_hashes:
         CHANGES.append(f"🗑️ Removed: `{old_key}`")
 
 save_hashes(curr_hashes)
-duration = int((datetime.datetime.utcnow() - start).total_seconds())
+duration = int((datetime.datetime.now(datetime.timezone.utc) - start).total_seconds())
 
 change_block = "\n".join(CHANGES) if CHANGES else "_No changes detected._"
 

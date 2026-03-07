@@ -20,7 +20,7 @@ INDEX_FILE  = META_DIR / "changelog-index.md"
 
 def run(cmd, silent=True):
     try:
-        return subprocess.check_output(cmd, shell=True, text=True,
+        return subprocess.check_output(cmd, shell=False, text=True,
                                        stderr=subprocess.DEVNULL).strip()
     except subprocess.CalledProcessError:
         return None
@@ -29,7 +29,7 @@ def run(cmd, silent=True):
 def fetch_changelog(username, repo_name, branch="main"):
     """Fetch CHANGELOG.md content via GitHub API. Returns text or None."""
     raw = run(
-        f"gh api repos/{username}/{repo_name}/contents/CHANGELOG.md 2>/dev/null"
+        ["gh", "api", f"repos/{username}/{repo_name}/contents/CHANGELOG.md"]
     )
     if raw:
         try:
@@ -68,7 +68,7 @@ def run_sync(repos, username=None):
     META_DIR.mkdir(exist_ok=True)
     OUTPUT_DIR.mkdir(exist_ok=True)
 
-    now_str = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     index_rows = []
     synced = 0
     missing = 0

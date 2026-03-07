@@ -366,7 +366,7 @@ if __name__ == "__main__":
 def run_command(cmd, input_data=None, silent=True):
     try:
         proc = subprocess.Popen(
-            cmd, shell=True,
+            cmd, shell=False,
             text=True,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -386,7 +386,7 @@ def run_command(cmd, input_data=None, silent=True):
 def put_file(repo, path, content, message):
     """Create or update a file via GitHub API."""
     # Check if file exists to get SHA
-    check_cmd = f"gh api repos/{USERNAME}/{repo}/contents/{path}"
+    check_cmd = ["gh", "api", f"repos/{USERNAME}/{repo}/contents/{path}"]
     existing = run_command(check_cmd, silent=True)
 
     sha = None
@@ -418,7 +418,7 @@ def put_file(repo, path, content, message):
     payload_json = json.dumps(payload)
 
     # PUT request
-    cmd = f"gh api --method PUT repos/{USERNAME}/{repo}/contents/{path} --input -"
+    cmd = ["gh", "api", "--method", "PUT", f"repos/{USERNAME}/{repo}/contents/{path}", "--input", "-"]
 
     res = run_command(cmd, input_data=payload_json, silent=False)
     if res:
@@ -432,7 +432,7 @@ def main():
     print(f"🚀 Starting Auto-Changelog Deployment for {USERNAME}...")
 
     # Check if gh is installed and authenticated
-    status = run_command("gh auth status", silent=True)
+    status = run_command(["gh", "auth", "status"], silent=True)
     if status is None:
         print("❌ 'gh' CLI not found or not authenticated. Please run 'gh auth login'.")
         # For testing in sandbox where gh is missing, we might want to continue?
@@ -441,7 +441,7 @@ def main():
 
     # List repos
     print("📋 Fetching repository list...")
-    repos_json = run_command(f"gh repo list {USERNAME} --limit 200 --json name,defaultBranchRef,archived", silent=False)
+    repos_json = run_command(["gh", "repo", "list", USERNAME, "--limit", "200", "--json", "name,defaultBranchRef,archived"], silent=False)
     if not repos_json:
         print("❌ Failed to fetch repos.")
         sys.exit(1)
